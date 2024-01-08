@@ -40,6 +40,10 @@ func main() {
 	privateKey, publicKey, err = rotator.RotatePrivateKeyAndPublicKey(
 		psPrivateKeyName, psPublicKeyName, sess,
 	)
+	if err := writePEMToFile(privateKeyFileName, rotator.EncodePrivateKeyToPEM(privateKey)); err != nil {
+	    fmt.Printf("Error writing private key to file: %s\n", err)
+	    return
+	}
 
 	if err != nil {
 		fmt.Printf("Error rotating keys: %s\n", err)
