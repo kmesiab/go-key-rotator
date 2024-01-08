@@ -145,14 +145,14 @@ func RotatePrivateKeyAndPublicKey() (*rsa.PrivateKey, *rsa.PublicKey, error) {
 	}
 
 	// Store private key
-	err = SetParameterStoreValue(parameterStoreKeyNamePrivateKey, string(privateKeyPEM), AWSStringSecureString)
+	err = setParameterStoreValue(parameterStoreKeyNamePrivateKey, string(privateKeyPEM), AWSStringSecureString)
 
 	if err != nil {
 		return nil, nil, err
 	}
 
 	// Store public key
-	err = SetParameterStoreValue(parameterStoreKeyNamePublicKey, string(publicKeyPEM), AWSStringSecureString)
+	err = setParameterStoreValue(parameterStoreKeyNamePublicKey, string(publicKeyPEM), AWSStringSecureString)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -269,7 +269,7 @@ func getParameterStoreValue(name string) (string, error) {
 	return *param.Parameter.Value, nil
 }
 
-// SetParameterStoreValue stores a given value in the AWS Parameter Store.
+// setParameterStoreValue stores a given value in the AWS Parameter Store.
 //
 // Parameters:
 //
@@ -289,7 +289,7 @@ func getParameterStoreValue(name string) (string, error) {
 // a regular string or an encrypted string (SecureString) based on the 'parameterType'.
 // The 'Overwrite' field in the PutParameterInput struct is set to true, allowing this
 // function to update the value of an existing parameter with the same name.
-func SetParameterStoreValue(parameterName, value, parameterType string) error {
+func setParameterStoreValue(parameterName, value, parameterType string) error {
 	var (
 		err  error
 		sess *session.Session
