@@ -1,4 +1,9 @@
-# Go Key Rotator
+# Go Key Rotator 🔐
+![Golang](https://img.shields.io/badge/Go-00add8.svg?labelColor=171e21&style=for-the-badge&logo=go)
+
+![Build](https://github.com/kmesiab/go-key-rotator/actions/workflows/go.yml/badge.svg)
+[![Go Report Card](https://goreportcard.com/badge/github.com/kmesiab/go-key-rotator)](https://goreportcard.com/report/github.com/kmesiab/go-key-rotator)
+
 
 ## Overview
 
@@ -20,7 +25,7 @@ operations like token signing and data encryption.
 To install `go_key_rotator`, use the `go get` command:
 
 ```bash
-go get github.com/your_username/go_key_rotator
+go get github.com/kmesiab/go_key_rotator
 ```
 
 This will download the package along with its dependencies.
