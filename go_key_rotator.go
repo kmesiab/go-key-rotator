@@ -137,22 +137,22 @@ func RotatePrivateKeyAndPublicKey() (*rsa.PrivateKey, *rsa.PublicKey, error) {
 		return nil, nil, err
 	}
 
-	privateKeyPEM := encodePrivateKeyToPEM(privateKey)
-	publicKeyPEM, err := encodePublicKeyToPEM(&privateKey.PublicKey)
+	privateKeyPEM := EncodePrivateKeyToPEM(privateKey)
+	publicKeyPEM, err := EncodePublicKeyToPEM(&privateKey.PublicKey)
 
 	if err != nil {
 		return nil, nil, err
 	}
 
 	// Store private key
-	err = SetParameterStoreValue(parameterStoreKeyNamePrivateKey, privateKeyPEM, AWSStringSecureString)
+	err = SetParameterStoreValue(parameterStoreKeyNamePrivateKey, string(privateKeyPEM), AWSStringSecureString)
 
 	if err != nil {
 		return nil, nil, err
 	}
 
 	// Store public key
-	err = SetParameterStoreValue(parameterStoreKeyNamePublicKey, publicKeyPEM, AWSStringSecureString)
+	err = SetParameterStoreValue(parameterStoreKeyNamePublicKey, string(publicKeyPEM), AWSStringSecureString)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -186,7 +186,7 @@ func generateRSAKeyPair(bits int) (*rsa.PrivateKey, error) {
 	return privateKey, nil
 }
 
-// encodePrivateKeyToPEM converts an RSA private key into PEM (Privacy Enhanced Mail) format.
+// EncodePrivateKeyToPEM converts an RSA private key into PEM (Privacy Enhanced Mail) format.
 // PEM format is a widely used encoding format for cryptographic keys and certificates,
 // which is essentially Base64 encoded data with additional header and footer lines.
 //
@@ -202,25 +202,28 @@ func generateRSAKeyPair(bits int) (*rsa.PrivateKey, error) {
 // It takes the RSA private key, converts it into a byte slice in PKCS#1 format using 'x509.MarshalPKCS1PrivateKey',
 // and then creates a PEM block with this byte slice. The 'Type' field of the PEM block is set to the value of 'RSAType',
 // typically "RSA PRIVATE KEY", indicating the type of key encoded in the PEM block.
-func encodePrivateKeyToPEM(privateKey *rsa.PrivateKey) string {
-	privateKeyPEM := pem.EncodeToMemory(&pem.Block{
+// Function to encode an RSA private key to PEM format
+func EncodePrivateKeyToPEM(privateKey *rsa.PrivateKey) []byte {
+	privateKeyPEM := &pem.Block{
 		Type:  RSATypePrivate,
 		Bytes: x509.MarshalPKCS1PrivateKey(privateKey),
-	})
-	return string(privateKeyPEM)
+	}
+	return pem.EncodeToMemory(privateKeyPEM)
 }
 
-func encodePublicKeyToPEM(publicKey *rsa.PublicKey) (string, error) {
+// EncodePublicKeyToPEM to encode an RSA public key to PEM format
+func EncodePublicKeyToPEM(publicKey *rsa.PublicKey) ([]byte, error) {
 	publicKeyBytes, err := x509.MarshalPKIXPublicKey(publicKey)
 
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	publicKeyPEM := pem.EncodeToMemory(&pem.Block{
+
+	publicKeyPEM := &pem.Block{
 		Type:  RSATypePublic,
 		Bytes: publicKeyBytes,
-	})
-	return string(publicKeyPEM), nil
+	}
+	return pem.EncodeToMemory(publicKeyPEM), nil
 }
 
 // getParameterStoreValue retrieves a value from AWS Parameter Store.
