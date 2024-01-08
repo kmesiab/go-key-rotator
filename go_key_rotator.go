@@ -21,16 +21,18 @@ import (
 
 const (
 	AWSStringSecureString           = "SecureString"
-	RSAType                         = "RSA PRIVATE KEY"
+	RSATypePrivate                  = "RSA PRIVATE KEY"
+	RSATypePublic                   = "RSA PUBLIC KEY"
 	parameterStoreKeyNamePrivateKey = "private_rsa_key"
+	parameterStoreKeyNamePublicKey  = "public_rsa_key"
 )
 
-// GetCurrentRSAKey retrieves the current RSA private key used for signing.
+// GetCurrentRSAPrivateKey retrieves the current RSA private key used for signing.
 // This function fetches the private key from AWS Parameter Store, where it is stored
 // in PEM format. The function then decodes the PEM encoded data to obtain the RSA private key
 // and returns it for use in cryptographic operations like token signing.
 // Returns an error if it fails to retrieve or decode the private key.
-func GetCurrentRSAKey() (*rsa.PrivateKey, error) {
+func GetCurrentRSAPrivateKey() (*rsa.PrivateKey, error) {
 	// Retrieve the private key string from Parameter Store
 	privateKeyPEM, err := getParameterStoreValue(parameterStoreKeyNamePrivateKey)
 	if err != nil {
@@ -56,36 +58,106 @@ func GetCurrentRSAKey() (*rsa.PrivateKey, error) {
 	return privateKey, nil
 }
 
-// RotatePrivateKey generates a new RSA private key and stores it in AWS Parameter Store.
-// This function is used to rotate the RSA private key periodically, enhancing the security
-// of the system by replacing old keys with new ones.
-// The function generates a new 2048-bit RSA key pair, encodes it in PEM format, and then
-// updates the stored key value in the AWS Parameter Store.
-// Returns the newly generated RSA private key or an error if any step in the process fails.
-func RotatePrivateKey() (*rsa.PrivateKey, error) {
-	// Generate a new 2048-bit RSA key pair
-	// 2048 bits is a commonly used key size that provides a good balance between security and performance
-	key, err := generateRSAKeyPair(2048)
-
+// GetCurrentRSAPublicKey retrieves the current RSA public key used for operations like verifying signatures.
+// It fetches the public key from AWS Parameter Store, where it's stored in PEM (Privacy Enhanced Mail) format.
+//
+// The function performs the following steps:
+//  1. Fetch the PEM-encoded public key string from the AWS Parameter Store using the key name defined in
+//     parameterStoreKeyNamePublicKey.
+//  2. Decode the PEM encoded data to extract the RSA public key.
+//     - PEM is a Base64 encoded format with delimiters for storing cryptographic keys and is widely used for its readability.
+//  3. Parse the decoded PEM block to get the actual RSA public key.
+//     - This uses x509.ParsePKIXPublicKey for parsing the public key in PKIX format.
+//  4. Validate and assert the type of the parsed key to ensure it is an RSA public key.
+//
+// Returns:
+//   - *rsa.PublicKey: The RSA public key retrieved and decoded from the Parameter Store.
+//   - error: An error object if any issue occurs during the key retrieval and decoding process. Possible errors include
+//     failure to fetch from Parameter Store, failure to decode the PEM block, or the data not being an RSA public key.
+//
+// Usage:
+// This function is typically used for cryptographic operations that require an RSA public key, such as verifying JWT tokens.
+func GetCurrentRSAPublicKey() (*rsa.PublicKey, error) {
+	publicKeyPEM, err := getParameterStoreValue(parameterStoreKeyNamePublicKey)
 	if err != nil {
 		return nil, err
 	}
 
-	// Encode the private key into PEM format
-	// PEM (Privacy-Enhanced Mail) format is a base64-encoded format used to represent
-	// cryptographic keys and certificates. The 'encodePrivateKeyToPEM' function handles this encoding
-	privateKeyPEM := encodePrivateKeyToPEM(key)
+	block, _ := pem.Decode([]byte(publicKeyPEM))
+	if block == nil {
+		return nil, errors.New("failed to decode PEM block containing the public key")
+	}
 
-	// Store the new key in AWS Parameter Store
-	// The key is stored as a SecureString, which means it will be encrypted in the Parameter Store
-	// 'parameterStoreKeyNamePrivateKey' is a constant that identifies the Parameter Store key where
-	// the RSA key is stored
+	publicKey, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		return nil, err
+	}
+
+	switch pub := publicKey.(type) {
+	case *rsa.PublicKey:
+		return pub, nil
+	default:
+		return nil, errors.New("not an RSA public key")
+	}
+}
+
+// RotatePrivateKeyAndPublicKey generates and stores new RSA private and public keys in AWS Parameter Store.
+//
+// This function performs the following steps:
+// 1. Generate a new RSA key pair with a specified key size (2048 bits in this case).
+//   - The 2048-bit size is chosen for a balance between strong security and acceptable performance.
+//
+// 2. Encode the generated private key into PEM format.
+//   - The PEM (Privacy Enhanced Mail) format is widely used for storing cryptographic keys as it
+//     is readable and supports encryption for private keys.
+//
+// 3. Extract and encode the public key from the generated private key into PEM format.
+// 4. Store both the private and public keys in AWS Parameter Store.
+//   - The keys are stored as SecureStrings, meaning they are encrypted in the store.
+//   - The private key is stored using the key identifier 'parameterStoreKeyNamePrivateKey'.
+//   - The public key is stored using the key identifier 'parameterStoreKeyNamePublicKey'.
+//
+// Returns:
+// - *rsa.PrivateKey: A pointer to the newly generated RSA private key.
+// - *rsa.PublicKey: A pointer to the corresponding RSA public key.
+// - error: An error object which is non-nil if there was an issue in key generation, encoding, or storing.
+//
+// Errors can occur in the following situations:
+// - Failure to generate the RSA key pair.
+// - Failure to encode the keys in PEM format.
+// - Failure to store the keys in AWS Parameter Store.
+//
+// Usage:
+// This function is intended to be used for rotating RSA keys periodically to maintain security.
+// Rotating keys helps in minimizing the risk if a key gets compromised and is an essential practice
+// in cryptographic key lifecycle management.
+func RotatePrivateKeyAndPublicKey() (*rsa.PrivateKey, *rsa.PublicKey, error) {
+	privateKey, err := generateRSAKeyPair(2048)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	privateKeyPEM := encodePrivateKeyToPEM(privateKey)
+	publicKeyPEM, err := encodePublicKeyToPEM(&privateKey.PublicKey)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Store private key
 	err = SetParameterStoreValue(parameterStoreKeyNamePrivateKey, privateKeyPEM, AWSStringSecureString)
+
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return key, nil
+	// Store public key
+	err = SetParameterStoreValue(parameterStoreKeyNamePublicKey, publicKeyPEM, AWSStringSecureString)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return privateKey, &privateKey.PublicKey, nil
 }
 
 // generateRSAKeyPair creates a new RSA private key of a specified size.
@@ -132,10 +204,23 @@ func generateRSAKeyPair(bits int) (*rsa.PrivateKey, error) {
 // typically "RSA PRIVATE KEY", indicating the type of key encoded in the PEM block.
 func encodePrivateKeyToPEM(privateKey *rsa.PrivateKey) string {
 	privateKeyPEM := pem.EncodeToMemory(&pem.Block{
-		Type:  RSAType,
+		Type:  RSATypePrivate,
 		Bytes: x509.MarshalPKCS1PrivateKey(privateKey),
 	})
 	return string(privateKeyPEM)
+}
+
+func encodePublicKeyToPEM(publicKey *rsa.PublicKey) (string, error) {
+	publicKeyBytes, err := x509.MarshalPKIXPublicKey(publicKey)
+
+	if err != nil {
+		return "", err
+	}
+	publicKeyPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  RSATypePublic,
+		Bytes: publicKeyBytes,
+	})
+	return string(publicKeyPEM), nil
 }
 
 // getParameterStoreValue retrieves a value from AWS Parameter Store.
