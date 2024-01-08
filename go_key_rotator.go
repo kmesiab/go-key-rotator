@@ -20,11 +20,9 @@ import (
 )
 
 const (
-	AWSStringSecureString           = "SecureString"
-	RSATypePrivate                  = "RSA PRIVATE KEY"
-	RSATypePublic                   = "RSA PUBLIC KEY"
-	parameterStoreKeyNamePrivateKey = "private_rsa_key"
-	parameterStoreKeyNamePublicKey  = "public_rsa_key"
+	AWSStringSecureString = "SecureString"
+	RSATypePrivate        = "RSA PRIVATE KEY"
+	RSATypePublic         = "RSA PUBLIC KEY"
 )
 
 // GetCurrentRSAPrivateKey retrieves the current RSA private key used for signing.
@@ -32,9 +30,9 @@ const (
 // in PEM format. The function then decodes the PEM encoded data to obtain the RSA private key
 // and returns it for use in cryptographic operations like token signing.
 // Returns an error if it fails to retrieve or decode the private key.
-func GetCurrentRSAPrivateKey() (*rsa.PrivateKey, error) {
+func GetCurrentRSAPrivateKey(parameterStoreKey string, session *session.Session) (*rsa.PrivateKey, error) {
 	// Retrieve the private key string from Parameter Store
-	privateKeyPEM, err := getParameterStoreValue(parameterStoreKeyNamePrivateKey)
+	privateKeyPEM, err := getParameterStoreValue(parameterStoreKey, session)
 	if err != nil {
 		return nil, err
 	}
@@ -77,8 +75,8 @@ func GetCurrentRSAPrivateKey() (*rsa.PrivateKey, error) {
 //
 // Usage:
 // This function is typically used for cryptographic operations that require an RSA public key, such as verifying JWT tokens.
-func GetCurrentRSAPublicKey() (*rsa.PublicKey, error) {
-	publicKeyPEM, err := getParameterStoreValue(parameterStoreKeyNamePublicKey)
+func GetCurrentRSAPublicKey(parameterStoreKey string, session *session.Session) (*rsa.PublicKey, error) {
+	publicKeyPEM, err := getParameterStoreValue(parameterStoreKey, session)
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +129,11 @@ func GetCurrentRSAPublicKey() (*rsa.PublicKey, error) {
 // This function is intended to be used for rotating RSA keys periodically to maintain security.
 // Rotating keys helps in minimizing the risk if a key gets compromised and is an essential practice
 // in cryptographic key lifecycle management.
-func RotatePrivateKeyAndPublicKey() (*rsa.PrivateKey, *rsa.PublicKey, error) {
+func RotatePrivateKeyAndPublicKey(
+	parameterStoreKeyNamePrivateKey string,
+	parameterStoreKeyNamePublicKey string,
+	session *session.Session,
+) (*rsa.PrivateKey, *rsa.PublicKey, error) {
 	privateKey, err := generateRSAKeyPair(2048)
 	if err != nil {
 		return nil, nil, err
@@ -145,14 +147,25 @@ func RotatePrivateKeyAndPublicKey() (*rsa.PrivateKey, *rsa.PublicKey, error) {
 	}
 
 	// Store private key
-	err = setParameterStoreValue(parameterStoreKeyNamePrivateKey, string(privateKeyPEM), AWSStringSecureString)
+	err = setParameterStoreValue(
+		parameterStoreKeyNamePrivateKey,
+		string(privateKeyPEM),
+		AWSStringSecureString,
+		session,
+	)
 
 	if err != nil {
 		return nil, nil, err
 	}
 
 	// Store public key
-	err = setParameterStoreValue(parameterStoreKeyNamePublicKey, string(publicKeyPEM), AWSStringSecureString)
+	err = setParameterStoreValue(
+		parameterStoreKeyNamePublicKey,
+		string(publicKeyPEM),
+		AWSStringSecureString,
+		session,
+	)
+
 	if err != nil {
 		return nil, nil, err
 	}
@@ -244,19 +257,14 @@ func EncodePublicKeyToPEM(publicKey *rsa.PublicKey) ([]byte, error) {
 // session and uses the SSM (Simple Systems Manager) service client to retrieve the parameter.
 // If the parameter is a SecureString, it will be automatically decrypted by the service
 // (as indicated by 'WithDecryption' set to true) before being returned.
-func getParameterStoreValue(name string) (string, error) {
+func getParameterStoreValue(name string, session *session.Session) (string, error) {
 
 	var (
 		err   error
-		sess  *session.Session
 		param *ssm.GetParameterOutput
 	)
 
-	if sess, err = session.NewSession(); err != nil {
-		return "", err
-	}
-
-	svc := ssm.New(sess)
+	svc := ssm.New(session)
 	input := &ssm.GetParameterInput{
 		Name:           aws.String(name),
 		WithDecryption: aws.Bool(true),
@@ -289,17 +297,9 @@ func getParameterStoreValue(name string) (string, error) {
 // a regular string or an encrypted string (SecureString) based on the 'parameterType'.
 // The 'Overwrite' field in the PutParameterInput struct is set to true, allowing this
 // function to update the value of an existing parameter with the same name.
-func setParameterStoreValue(parameterName, value, parameterType string) error {
-	var (
-		err  error
-		sess *session.Session
-	)
+func setParameterStoreValue(parameterName, value, parameterType string, session *session.Session) error {
 
-	if sess, err = session.NewSession(); err != nil {
-		return err
-	}
-
-	svc := ssm.New(sess)
+	svc := ssm.New(session)
 	input := &ssm.PutParameterInput{
 		Name:      aws.String(parameterName),
 		Value:     aws.String(value),
@@ -307,7 +307,7 @@ func setParameterStoreValue(parameterName, value, parameterType string) error {
 		Overwrite: aws.Bool(true),
 	}
 
-	_, err = svc.PutParameter(input)
+	_, err := svc.PutParameter(input)
 
 	return err
 }

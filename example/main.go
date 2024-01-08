@@ -5,10 +5,16 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
+
 	rotator "github.com/kmesiab/go-key-rotator"
 )
 
 const (
+	psPrivateKeyName = "private_rsa_key"
+	psPublicKeyName  = "public_rsa_key"
+
 	privateKeyFileName = "private.pem"
 	publicKeyFileName  = "public.pem"
 )
@@ -17,12 +23,23 @@ func main() {
 
 	var (
 		err              error
+		sess             *session.Session
 		privateKey       *rsa.PrivateKey
 		publicKey        *rsa.PublicKey
 		encodedPublicKey []byte
 	)
 
-	privateKey, publicKey, err = rotator.RotatePrivateKeyAndPublicKey()
+	config := aws.NewConfig().WithRegion("us-west-2")
+
+	if sess, err = session.NewSession(config); err != nil {
+		fmt.Printf("Error creating AWS config: %s\n", err)
+
+		return
+	}
+
+	privateKey, publicKey, err = rotator.RotatePrivateKeyAndPublicKey(
+		psPrivateKeyName, psPublicKeyName, sess,
+	)
 
 	if err != nil {
 		fmt.Printf("Error rotating keys: %s\n", err)
