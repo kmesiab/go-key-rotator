@@ -37,12 +37,18 @@ func main() {
 		return
 	}
 
-	privateKey, publicKey, err = rotator.RotatePrivateKeyAndPublicKey(
+	keyRotator := rotator.NewKeyRotator(
+		rotator.NewAWSParameterStore(sess),
+	)
+
+	privateKey, publicKey, err = keyRotator.RotatePrivateKeyAndPublicKey(
 		psPrivateKeyName, psPublicKeyName, sess,
 	)
+
 	if err := writePEMToFile(privateKeyFileName, rotator.EncodePrivateKeyToPEM(privateKey)); err != nil {
-	    fmt.Printf("Error writing private key to file: %s\n", err)
-	    return
+		fmt.Printf("Error writing private key to file: %s\n", err)
+
+		return
 	}
 
 	if err != nil {
@@ -74,5 +80,6 @@ func main() {
 
 // Function to write PEM data to a file
 func writePEMToFile(fileName string, pemData []byte) error {
+
 	return os.WriteFile(fileName, pemData, 0644)
 }
