@@ -1,9 +1,12 @@
 # Go Key Rotator 🔐
+
 ![Golang](https://img.shields.io/badge/Go-00add8.svg?labelColor=171e21&style=for-the-badge&logo=go)
+[![License](https://img.shields.io/github/license/GitGuardian/ggshield?color=%231B2D55&style=for-the-badge)](LICENSE)
 
-![Build](https://github.com/kmesiab/go-key-rotator/actions/workflows/go.yml/badge.svg)
+![Build](https://github.com/kmesiab/go-key-rotator/actions/workflows/go-build.yml/badge.svg)
+![Lint](https://github.com/kmesiab/go-key-rotator/actions/workflows/go-lint.yml/badge.svg)
+![Test](https://github.com/kmesiab/go-key-rotator/actions/workflows/go-test.yml/badge.svg)
 [![Go Report Card](https://goreportcard.com/badge/github.com/kmesiab/go-key-rotator)](https://goreportcard.com/report/github.com/kmesiab/go-key-rotator)
-
 
 ## Overview
 
@@ -43,20 +46,28 @@ import (
 )
 
 func main() {
-	// Example: Using go_key_rotator for RSA key management
+   // Example: Using go_key_rotator for RSA key management
 
-	// Rotate the RSA key and store the new key in AWS Parameter Store
-	newPrivateKey, newPublicKey, err := go_key_rotator.RotatePrivateKeyAndPublicKey()
-	
-	if err != nil {
-		log.Fatalf("Failed to rotate private key: %v", err)
-	}
-	
-	log.Println("New RSA keys generated and stored.")
+   // Create a rotator and give it a ParameterStoreInterface
+   keyRotator := rotator.NewKeyRotator(
+      rotator.NewAWSParameterStore(sess),
+   )
+
+   // Call Rotate and tell it where to store your keys
+   // how big to make them
+   privateKey, publicKey, err = keyRotator.Rotate(
+      psPrivateKeyName, psPublicKeyName, 2048,
+   )   
+   
+   if err != nil {
+      log.Fatalf("Failed to rotate private key: %v", err)
+   }
+   
+   log.Println("New RSA keys generated and stored.")
 }
 ```
 
-### Get the current keys:
+### Get the current keys
 
 ```go
    currentPrivateKey, err := go_key_rotator.GetCurrentRSAPrivateKey()
